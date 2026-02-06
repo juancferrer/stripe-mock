@@ -412,7 +412,7 @@ func (s *StubServer) initializeRouter() error {
 
 				var err error
 				requestValidator, err = spec.GetValidatorForOpenAPI3Schema(
-					requestSchema, nil)
+					requestSchema, nil, false)
 				if err != nil {
 					return err
 				}
@@ -422,7 +422,7 @@ func (s *StubServer) initializeRouter() error {
 				if requestSchema != nil {
 					var err error
 					requestValidator, err = spec.GetValidatorForOpenAPI3Schema(
-						requestSchema, componentsForValidation)
+						requestSchema, componentsForValidation, true)
 					if err != nil {
 						return err
 					}

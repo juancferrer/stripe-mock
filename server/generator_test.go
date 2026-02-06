@@ -561,7 +561,7 @@ func TestValidFixtures(t *testing.T) {
 		t.Run(name, func(t2 *testing.T) {
 			fixture, ok := realFixtures.Resources[spec.ResourceID(schema.XResourceID)]
 			assert.True(t2, ok)
-			validator, err := spec.GetValidatorForOpenAPI3Schema(schema, realComponentsForValidation)
+			validator, err := spec.GetValidatorForOpenAPI3Schema(schema, realComponentsForValidation, false)
 			assert.NoError(t2, err)
 			err = validator.Validate(fixture)
 			assert.NoError(t2, err)
@@ -1095,7 +1095,7 @@ func testCanGenerate(t *testing.T, path spec.Path, schema *spec.Schema, expand b
 	})
 	assert.NoError(t, err)
 
-	validator, err := spec.GetValidatorForOpenAPI3Schema(schema, realComponentsForValidation)
+	validator, err := spec.GetValidatorForOpenAPI3Schema(schema, realComponentsForValidation, false)
 	assert.NoError(t, err)
 	err = validator.Validate(example)
 	if err != nil {

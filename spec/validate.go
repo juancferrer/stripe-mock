@@ -14,8 +14,14 @@ type ComponentsForValidation struct {
 
 // GetValidatorForOpenAPI3Schema gets a JSON Schema validator for a given
 // OpenAPI specification and set of JSON Schema components.
-func GetValidatorForOpenAPI3Schema(oaiSchema *Schema, components *ComponentsForValidation) (*jsval.JSVal, error) {
-	jsonSchemaAsJSON := getJSONSchemaForOpenAPI3Schema(oaiSchema)
+//
+// When strictAdditionalProperties is true, any object-type schema that does not
+// explicitly allow additional properties will have additionalProperties set to
+// false. This should be enabled for request body validation so that unknown
+// parameters are rejected at all nesting levels, matching the behavior of the
+// real Stripe API.
+func GetValidatorForOpenAPI3Schema(oaiSchema *Schema, components *ComponentsForValidation, strictAdditionalProperties bool) (*jsval.JSVal, error) {
+	jsonSchemaAsJSON := getJSONSchemaForOpenAPI3Schema(oaiSchema, strictAdditionalProperties)
 
 	jsonSchema := schema.New()
 	err := jsonSchema.Extract(jsonSchemaAsJSON)
@@ -43,7 +49,7 @@ func GetValidatorForOpenAPI3Schema(oaiSchema *Schema, components *ComponentsForV
 func GetComponentsForValidation(components *Components) *ComponentsForValidation {
 	jsonSchemas := make(map[string]interface{})
 	for name, oaiSchema := range components.Schemas {
-		jsonSchemas[name] = getJSONSchemaForOpenAPI3Schema(oaiSchema)
+		jsonSchemas[name] = getJSONSchemaForOpenAPI3Schema(oaiSchema, false)
 	}
 	return &ComponentsForValidation{
 		root: map[string]interface{}{
@@ -54,6 +60,12 @@ func GetComponentsForValidation(components *Components) *ComponentsForValidation
 	}
 }
 
+// isObjectLike returns true if the schema represents an object type, either by
+// explicit type declaration or by having properties defined.
+func isObjectLike(oai *Schema) bool {
+	return oai.Type == TypeObject || len(oai.Properties) > 0
+}
+
 // Given an OpenAPI 3 schema represented as JSON, returns an equivalent JSON
 // Schema represented as JSON. The important difference between OpenAPI 3
 // schemas and JSON schemas is that OpenAPI 3 uses "nullable: true" to mark
@@ -62,20 +74,29 @@ func GetComponentsForValidation(components *Components) *ComponentsForValidation
 //
 // This converter only handles the options that are supported by the spec.Schema
 // type, and it must be updated when new options are supported.
-func getJSONSchemaForOpenAPI3Schema(oai *Schema) map[string]interface{} {
+//
+// When strictAdditionalProperties is true, object schemas that don't explicitly
+// specify additionalProperties will default to rejecting unknown properties.
+// This is propagated recursively through all nested schemas.
+func getJSONSchemaForOpenAPI3Schema(oai *Schema, strictAdditionalProperties bool) map[string]interface{} {
 	jss := make(map[string]interface{})
 	if !oai.AdditionalPropertiesAllowed {
 		jss["additionalProperties"] = false
-	} else {
-		if oai.AdditionalProperties != nil {
-			jss["additionalProperties"] = getJSONSchemaForOpenAPI3Schema(oai.AdditionalProperties)
-		}
+	} else if oai.AdditionalProperties != nil {
+		jss["additionalProperties"] = getJSONSchemaForOpenAPI3Schema(
+			oai.AdditionalProperties, strictAdditionalProperties)
+	} else if strictAdditionalProperties && isObjectLike(oai) {
+		// In strict mode, default object schemas without explicit
+		// additionalProperties to false. This ensures nested objects in
+		// request bodies reject unknown parameters, matching the behavior
+		// of the real Stripe API.
+		jss["additionalProperties"] = false
 	}
 
 	if len(oai.AnyOf) != 0 {
 		var jssAnyOf = make([]interface{}, len(oai.AnyOf))
 		for index, oaiSubschema := range oai.AnyOf {
-			jssAnyOf[index] = getJSONSchemaForOpenAPI3Schema(oaiSubschema)
+			jssAnyOf[index] = getJSONSchemaForOpenAPI3Schema(oaiSubschema, strictAdditionalProperties)
 		}
 		if oai.Nullable {
 			jssAnyOf = append(jssAnyOf, map[string]interface{}{"const": nil})
@@ -96,7 +117,7 @@ func getJSONSchemaForOpenAPI3Schema(oai *Schema) map[string]interface{} {
 		jss["format"] = oai.Format
 	}
 	if oai.Items != nil {
-		jss["items"] = getJSONSchemaForOpenAPI3Schema(oai.Items)
+		jss["items"] = getJSONSchemaForOpenAPI3Schema(oai.Items, strictAdditionalProperties)
 	}
 	if oai.MaxLength != 0 {
 		jss["maxLength"] = oai.MaxLength
@@ -107,7 +128,7 @@ func getJSONSchemaForOpenAPI3Schema(oai *Schema) map[string]interface{} {
 	if len(oai.Properties) != 0 {
 		var jssProperties = make(map[string]interface{})
 		for key, oaiSubschema := range oai.Properties {
-			jssProperties[key] = getJSONSchemaForOpenAPI3Schema(oaiSubschema)
+			jssProperties[key] = getJSONSchemaForOpenAPI3Schema(oaiSubschema, strictAdditionalProperties)
 		}
 		jss["properties"] = jssProperties
 	}

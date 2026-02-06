@@ -116,6 +116,13 @@ func initTestSpec() {
 							"amount": {
 								Type: spec.TypeInteger,
 							},
+							"shipping": {
+								Type:                        spec.TypeObject,
+								AdditionalPropertiesAllowed: true,
+								Properties: map[string]*spec.Schema{
+									"name": {Type: spec.TypeString},
+								},
+							},
 						},
 						Required: []string{"amount"},
 					},
@@ -498,6 +505,20 @@ func TestStubServer_ParameterValidation(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
+func TestStubServer_NestedParameterValidation(t *testing.T) {
+	// Valid nested params should pass
+	resp, _ := sendRequest(t, "POST", "/v1/charges",
+		"amount=123&shipping[name]=test", getDefaultHeaders(), nil)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Unknown nested params should be rejected
+	resp, body := sendRequest(t, "POST", "/v1/charges",
+		"amount=123&shipping[name]=test&shipping[bogus]=foo",
+		getDefaultHeaders(), nil)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, string(body), "additional properties are not allowed")
+}
+
 func TestStubServer_FormatsForCurl(t *testing.T) {
 	headers := getDefaultHeaders()
 	headers["User-Agent"] = "curl/1.2.3"
@@ -702,7 +723,7 @@ func TestGetValidator(t *testing.T) {
 	assert.Equal(t, "application/x-www-form-urlencoded", *mediaType)
 	assert.NotNil(t, schema)
 
-	validator, err := spec.GetValidatorForOpenAPI3Schema(schema, nil)
+	validator, err := spec.GetValidatorForOpenAPI3Schema(schema, nil, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, validator)
 
