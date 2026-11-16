@@ -85,6 +85,7 @@ var supportedSchemaFields = []string{
 	"x-stripeOperations",
 	"x-stripeParam",
 	"x-stripeEvent",
+	"x-stripeEnum",
 	"x-stripeMostCommon",
 	// This isn't used in our SDK, but is additional metadata unnecessary for
 	// stripe-mock.
@@ -94,6 +95,10 @@ var supportedSchemaFields = []string{
 	// Schema yet. If we do start validating responses that come out of
 	// stripe-mock, we may need to observe this as well.
 	"x-stripeBypassValidation",
+
+	// A stable identifier for schema elements, used for tracking across spec
+	// versions. Not needed by stripe-mock.
+	"x-stableId",
 }
 
 // Schema is a struct representing a JSON schema.
